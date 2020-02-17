@@ -43,6 +43,8 @@ import static org.springframework.web.bind.annotation.RequestMethod.GET;
 @RequestMapping("/iex")
 public class CompanyResource {
 
+    final static String DEFAULT_DYNAMIC_TIME = "dynamic";
+
     @Autowired
     CompanyRepository companyRepository;
 
@@ -52,15 +54,18 @@ public class CompanyResource {
     @Autowired
     IEXCloudClientService cloudClientService;
 
-    @RequestMapping(
-            value = "/{time}/company",
-            params = {"symbol"},
-            method = GET)
-    public List<Company> getCompanies(@RequestParam("symbol") List<String> symbol, @PathVariable String time) throws IOException, JSONException {
+    @GetMapping(value = "/company")
+    public List<Company> getCompanies(@RequestParam("symbol") List<String> symbol, @RequestParam(value = "time", required = false) String time) throws IOException, JSONException {
 
         final List<Company> companies = new ArrayList<>();
         final List<Price> pricesToSave = new ArrayList<>();
         final List<Company> companyToSave = new ArrayList<>();
+
+        if(time == null){
+            //dynamic	One day	Will return 1d or 1m data depending on the day or week and time of day.
+            // Intraday per minute data is only returned during market hours.
+            time = DEFAULT_DYNAMIC_TIME;
+        }
         for (String s :
                 symbol) {
 
