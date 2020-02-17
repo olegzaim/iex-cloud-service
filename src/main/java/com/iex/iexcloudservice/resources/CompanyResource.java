@@ -4,15 +4,13 @@ import com.iex.iexcloudservice.models.Company;
 import com.iex.iexcloudservice.models.Price;
 import com.iex.iexcloudservice.repository.CompanyRepository;
 import com.iex.iexcloudservice.repository.PriceRepository;
+import com.iex.iexcloudservice.services.IEXCloudClientService;
 import org.json.JSONException;
 import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.web.servlet.server.Session;
 import org.springframework.util.CompositeIterator;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import pl.zankowski.iextrading4j.api.stocks.Chart;
 import pl.zankowski.iextrading4j.api.stocks.ChartRange;
 import pl.zankowski.iextrading4j.api.stocks.Logo;
@@ -39,9 +37,10 @@ import java.util.Collections;
 import java.util.List;
 
 import static java.util.stream.Collectors.toList;
+import static org.springframework.web.bind.annotation.RequestMethod.GET;
 
 @RestController
-@RequestMapping("/company")
+@RequestMapping("/iex")
 public class CompanyResource {
 
     @Autowired
@@ -50,43 +49,53 @@ public class CompanyResource {
     @Autowired
     PriceRepository priceRepository;
 
-    final static String PUBLIC_TOKEN = "pk_387b905493f24084ab489672944d2683";
-    final static String SECRET_TOKEN = "sk_6e53d0fe05724d3a993d20223741bdd9";
+    @Autowired
+    IEXCloudClientService cloudClientService;
 
-    @GetMapping("/{name}")
-    public List<Company> getCompanies(@PathVariable String name) throws IOException, JSONException {
+    @RequestMapping(
+            value = "/{time}/company",
+            params = {"symbol"},
+            method = GET)
+    public List<Company> getCompanies(@RequestParam("symbol") List<String> symbol, @PathVariable String time) throws IOException, JSONException {
 
-        final IEXCloudClient cloudClient = IEXTradingClient.create(IEXTradingApiVersion.IEX_CLOUD_V1,
-                new IEXCloudTokenBuilder()
-                        .withPublishableToken(PUBLIC_TOKEN)
-                        .withSecretToken(SECRET_TOKEN)
-                        .build());
+        final List<Company> companies = new ArrayList<>();
+        final List<Price> pricesToSave = new ArrayList<>();
+        final List<Company> companyToSave = new ArrayList<>();
+        for (String s :
+                symbol) {
 
-        final String logoUrl = cloudClient.executeRequest(new LogoRequestBuilder().withSymbol(name).build()).getUrl();
-        final String companyName = cloudClient.executeRequest(new CompanyRequestBuilder().withSymbol(name).build()).getCompanyName();
-        final List<Chart> chart = cloudClient.executeRequest(new ChartRequestBuilder().withSymbol(name).withChartRange(ChartRange.getValueFromCode("1m")).build());
+            final String companyName = cloudClientService.getCompanyNameFromIEX(s);
 
-        Company company = companyRepository.findByName(companyName);
-        boolean companyAlreadyExist = company != null;
-        if (!companyAlreadyExist) {
-            company = new Company();
-            company.setLogoUrl(logoUrl);
-            company.setName(companyName);
+            Company company = companyRepository.findByName(companyName);
+
+            boolean isCompanyExist = company != null;
+            if (!isCompanyExist) {
+                company = new Company();
+                company.setLogoUrl(cloudClientService.getCompanyLogoFromIEX(s));
+                company.setName(companyName);
+            }
+
+            final List<Chart> chart = cloudClientService.getCompanyChartFromIEX(s, time);
+            final List<Price> prices = new ArrayList<>();
+            for (Chart c :
+                    chart) {
+                prices.add(new Price(c, company));
+            }
+            company.setPrices(prices);
+
+            if (!isCompanyExist) {
+                companyToSave.add(company);
+            }
+            companies.add(company);
+            pricesToSave.addAll(prices);
         }
-
-        List<Price> prices = new ArrayList<>();
-
-        for (Chart c :
-                chart) {
-            prices.add(new com.iex.iexcloudservice.models.Price(c, company));
+        if (!companyToSave.isEmpty()) {
+            companyRepository.saveAll(companyToSave);
         }
-
-        company.setPrices(prices);
-        if(!companyAlreadyExist) {
-            companyRepository.save(company);
+        if (!pricesToSave.isEmpty()) {
+            priceRepository.saveAll(pricesToSave);
         }
-        priceRepository.saveAll(prices);
-        return Collections.singletonList(company);
+        return companies;
     }
 
     @GetMapping("/history")
