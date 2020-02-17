@@ -34,3 +34,4 @@
         *Adding DB migration tools like "Flyway";
         *Deploying service and DB on the server machine;
         *Optionaly adding Front-end;
+        *Adding unit and automation tests
