@@ -6,12 +6,12 @@
         
         * store a history of all retrieved prices in MySQL
           HTTP Endpoint for retrived price history is:
-          iex/company/history
+          localhost:8080/iex/history
           
         * return a JSON document that includes each queried company's name, logo (URL) and the list of polled
           prices, optionally limited by the given time frame.
           HTTP Endpoint that returns prices by company symbol is: 
-          iex/company?symbol=aapl&symbol=ibm&time=1m 
+          localhost:8080/iex/company?symbol=aapl&symbol=ibm&time=1m 
           where time it's not required and by default is a dynamic(One day	Will return 1d or 1m data depending on the day or week and time of day.
             // Intraday per minute data is only returned during market hours)
           Time parameters:
